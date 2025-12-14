@@ -1,0 +1,1698 @@
+-- Universal Tool v5.0
+-- Delta Executor - Enhanced Edition
+-- ESP Fix + Ragnaroll Fix + Fly + Scroll GUI
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local Player = Players.LocalPlayer
+local Mouse = Player:GetMouse()
+local Camera = workspace.CurrentCamera
+
+local function GetCharacter()
+    return Player.Character or Player.CharacterAdded:Wait()
+end
+
+local Character = GetCharacter()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart", 10)
+
+-- Ayarlar
+local Settings = {
+    BlackHoleEnabled = false,
+    TelekinesisEnabled = false,
+    StunEnabled = false,
+    RagdollEnabled = false,
+    AutoRagdollEnabled = false,
+    ESPEnabled = false,
+    FlyEnabled = false,
+    FlingEnabled = false,
+    PullForce = 50,
+    PullRadius = 150,
+    TKDistance = 6,
+    FlySpeed = 50,
+    ESPUpdateRate = 5
+}
+
+-- Connections & Storage
+local Connections = {}
+local TKObject = nil
+local TKHighlight = nil
+local StunnedObjects = {}
+local RagdolledNPCs = {}
+local ESPObjects = {}
+local FlyBodyGyro = nil
+local FlyBodyVelocity = nil
+local FlingPart = nil
+
+-- Tehlikeli NPC anahtar kelimeleri (Genişletilmiş)
+local DangerousKeywords = {
+    "zombie", "enemy", "monster", "creature", "killer", "attack", "hostile",
+    "boss", "minion", "demon", "ghost", "skeleton", "spider", "wolf",
+    "bear", "dragon", "slime", "goblin", "orc", "bandit", "guard",
+    "soldier", "warrior", "fighter", "hunter", "predator", "beast",
+    "mutant", "infected", "undead", "evil", "dark", "shadow", "death",
+    "kill", "damage", "hurt", "chase", "follow", "target", "aggro",
+    "mob", "npc", "ai", "bot", "dummy", "test", "horror", "scp",
+    "nextbot", "entity", "backroom", "monster", "creep", "alien"
+}
+
+-- Güvenli NPC anahtar kelimeleri (YENİ)
+local SafeKeywords = {
+    "shop", "vendor", "merchant", "npc", "friendly", "ally", "helper",
+    "guide", "quest", "civilian", "villager", "citizen", "pet", "companion",
+    "assistant", "clerk", "trader", "seller", "buyer", "customer"
+}
+
+-- Eski GUI Temizle
+local function ClearOldGUI()
+    pcall(function()
+        for _, gui in pairs(game:GetService("CoreGui"):GetChildren()) do
+            if gui.Name == "UniversalToolGUI_V5" then gui:Destroy() end
+        end
+        for _, gui in pairs(Player.PlayerGui:GetChildren()) do
+            if gui.Name == "UniversalToolGUI_V5" then gui:Destroy() end
+        end
+    end)
+end
+
+ClearOldGUI()
+wait(0.1)
+
+-- GUI Oluştur
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "UniversalToolGUI_V5"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+pcall(function()
+    ScreenGui.Parent = game:GetService("CoreGui")
+end)
+if not ScreenGui.Parent then
+    pcall(function()
+        ScreenGui.Parent = Player:WaitForChild("PlayerGui")
+    end)
+end
+
+-- Ana Frame (Küçültülmüş)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 200, 0, 350) -- Küçültüldü
+MainFrame.Position = UDim2.new(0, 15, 0.5, -175)
+MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.Parent = MainFrame
+
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = Color3.fromRGB(80, 40, 120)
+MainStroke.Thickness = 2
+MainStroke.Parent = MainFrame
+
+-- Başlık
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 36)
+TitleBar.BackgroundColor3 = Color3.fromRGB(35, 25, 55)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 12)
+TitleCorner.Parent = TitleBar
+
+local TitleFix = Instance.new("Frame")
+TitleFix.Size = UDim2.new(1, 0, 0, 12)
+TitleFix.Position = UDim2.new(0, 0, 1, -12)
+TitleFix.BackgroundColor3 = Color3.fromRGB(35, 25, 55)
+TitleFix.BorderSizePixel = 0
+TitleFix.Parent = TitleBar
+
+local TitleText = Instance.new("TextLabel")
+TitleText.Size = UDim2.new(1, -40, 1, 0)
+TitleText.Position = UDim2.new(0, 10, 0, 0)
+TitleText.BackgroundTransparency = 1
+TitleText.Text = "🌀 Universal v5.0"
+TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleText.TextSize = 14
+TitleText.Font = Enum.Font.GothamBold
+TitleText.TextXAlignment = Enum.TextXAlignment.Left
+TitleText.Parent = TitleBar
+
+-- Küçültme Butonu
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0, 26, 0, 26)
+MinBtn.Position = UDim2.new(1, -31, 0, 5)
+MinBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 80)
+MinBtn.BorderSizePixel = 0
+MinBtn.Text = "−"
+MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinBtn.TextSize = 18
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.Parent = TitleBar
+
+local MinBtnCorner = Instance.new("UICorner")
+MinBtnCorner.CornerRadius = UDim.new(0, 6)
+MinBtnCorner.Parent = MinBtn
+
+-- Scroll Frame (YENİ - Kaydırılabilir)
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Name = "ScrollFrame"
+ScrollFrame.Size = UDim2.new(1, -8, 1, -42)
+ScrollFrame.Position = UDim2.new(0, 4, 0, 40)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.ScrollBarThickness = 4
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 80, 150)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 700) -- İçerik boyutu
+ScrollFrame.Parent = MainFrame
+
+-- İçerik Frame
+local Content = Instance.new("Frame")
+Content.Name = "Content"
+Content.Size = UDim2.new(1, -8, 0, 700)
+Content.Position = UDim2.new(0, 4, 0, 0)
+Content.BackgroundTransparency = 1
+Content.Parent = ScrollFrame
+
+-- ═══════════════════════════════════════
+-- TOGGLE OLUŞTURUCU
+-- ═══════════════════════════════════════
+
+local function CreateToggle(name, text, icon, yPos, defaultState, onEnable, onDisable)
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Name = name .. "Frame"
+    ToggleFrame.Size = UDim2.new(1, 0, 0, 40)
+    ToggleFrame.Position = UDim2.new(0, 0, 0, yPos)
+    ToggleFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    ToggleFrame.BorderSizePixel = 0
+    ToggleFrame.Parent = Content
+    
+    local FrameCorner = Instance.new("UICorner")
+    FrameCorner.CornerRadius = UDim.new(0, 8)
+    FrameCorner.Parent = ToggleFrame
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -70, 1, 0)
+    Label.Position = UDim2.new(0, 10, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = icon .. " " .. text
+    Label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    Label.TextSize = 12
+    Label.Font = Enum.Font.GothamSemibold
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = ToggleFrame
+    
+    local SwitchBG = Instance.new("Frame")
+    SwitchBG.Size = UDim2.new(0, 44, 0, 22)
+    SwitchBG.Position = UDim2.new(1, -52, 0.5, -11)
+    SwitchBG.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    SwitchBG.BorderSizePixel = 0
+    SwitchBG.Parent = ToggleFrame
+    
+    local SwitchBGCorner = Instance.new("UICorner")
+    SwitchBGCorner.CornerRadius = UDim.new(1, 0)
+    SwitchBGCorner.Parent = SwitchBG
+    
+    local Knob = Instance.new("Frame")
+    Knob.Size = UDim2.new(0, 18, 0, 18)
+    Knob.Position = UDim2.new(0, 2, 0.5, -9)
+    Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Knob.BorderSizePixel = 0
+    Knob.Parent = SwitchBG
+    
+    local KnobCorner = Instance.new("UICorner")
+    KnobCorner.CornerRadius = UDim.new(1, 0)
+    KnobCorner.Parent = Knob
+    
+    local ClickBtn = Instance.new("TextButton")
+    ClickBtn.Size = UDim2.new(1, 0, 1, 0)
+    ClickBtn.BackgroundTransparency = 1
+    ClickBtn.Text = ""
+    ClickBtn.Parent = ToggleFrame
+    
+    local isEnabled = defaultState
+    
+    local function UpdateVisual(enabled, animate)
+        if animate then
+            if enabled then
+                TweenService:Create(SwitchBG, TweenInfo.new(0.25), {BackgroundColor3 = Color3.fromRGB(80, 200, 120)}):Play()
+                TweenService:Create(Knob, TweenInfo.new(0.25), {Position = UDim2.new(1, -20, 0.5, -9)}):Play()
+                TweenService:Create(ToggleFrame, TweenInfo.new(0.25), {BackgroundColor3 = Color3.fromRGB(35, 50, 40)}):Play()
+            else
+                TweenService:Create(SwitchBG, TweenInfo.new(0.25), {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}):Play()
+                TweenService:Create(Knob, TweenInfo.new(0.25), {Position = UDim2.new(0, 2, 0.5, -9)}):Play()
+                TweenService:Create(ToggleFrame, TweenInfo.new(0.25), {BackgroundColor3 = Color3.fromRGB(28, 28, 42)}):Play()
+            end
+        else
+            SwitchBG.BackgroundColor3 = enabled and Color3.fromRGB(80, 200, 120) or Color3.fromRGB(60, 60, 70)
+            Knob.Position = enabled and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
+            ToggleFrame.BackgroundColor3 = enabled and Color3.fromRGB(35, 50, 40) or Color3.fromRGB(28, 28, 42)
+        end
+    end
+    
+    ClickBtn.MouseButton1Click:Connect(function()
+        isEnabled = not isEnabled
+        UpdateVisual(isEnabled, true)
+        
+        if isEnabled then
+            if onEnable then onEnable() end
+        else
+            if onDisable then onDisable() end
+        end
+    end)
+    
+    -- Mobile Touch Support
+    ClickBtn.TouchTap:Connect(function()
+        isEnabled = not isEnabled
+        UpdateVisual(isEnabled, true)
+        
+        if isEnabled then
+            if onEnable then onEnable() end
+        else
+            if onDisable then onDisable() end
+        end
+    end)
+    
+    UpdateVisual(defaultState, false)
+    
+    return {
+        SetState = function(state)
+            isEnabled = state
+            UpdateVisual(state, true)
+            if state then
+                if onEnable then onEnable() end
+            else
+                if onDisable then onDisable() end
+            end
+        end,
+        GetState = function() return isEnabled end
+    }
+end
+
+-- ═══════════════════════════════════════
+-- BUTON OLUŞTURUCU
+-- ═══════════════════════════════════════
+
+local function CreateButton(name, text, yPos, color)
+    local Btn = Instance.new("TextButton")
+    Btn.Name = name
+    Btn.Size = UDim2.new(1, 0, 0, 32)
+    Btn.Position = UDim2.new(0, 0, 0, yPos)
+    Btn.BackgroundColor3 = color
+    Btn.BorderSizePixel = 0
+    Btn.Text = text
+    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Btn.TextSize = 11
+    Btn.Font = Enum.Font.GothamSemibold
+    Btn.Parent = Content
+    
+    local BtnCorner = Instance.new("UICorner")
+    BtnCorner.CornerRadius = UDim.new(0, 8)
+    BtnCorner.Parent = Btn
+    
+    return Btn
+end
+
+-- ═══════════════════════════════════════
+-- SLIDER OLUŞTURUCU
+-- ═══════════════════════════════════════
+
+local function CreateSlider(name, text, yPos, minVal, maxVal, defaultVal, callback)
+    local SliderFrame = Instance.new("Frame")
+    SliderFrame.Name = name
+    SliderFrame.Size = UDim2.new(1, 0, 0, 35)
+    SliderFrame.Position = UDim2.new(0, 0, 0, yPos)
+    SliderFrame.BackgroundTransparency = 1
+    SliderFrame.Parent = Content
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, 0, 0, 14)
+    Label.BackgroundTransparency = 1
+    Label.Text = text .. ": " .. defaultVal
+    Label.TextColor3 = Color3.fromRGB(180, 180, 200)
+    Label.TextSize = 10
+    Label.Font = Enum.Font.Gotham
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = SliderFrame
+    
+    local SliderBG = Instance.new("Frame")
+    SliderBG.Size = UDim2.new(1, 0, 0, 6)
+    SliderBG.Position = UDim2.new(0, 0, 0, 18)
+    SliderBG.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    SliderBG.BorderSizePixel = 0
+    SliderBG.Parent = SliderFrame
+    
+    local SliderBGCorner = Instance.new("UICorner")
+    SliderBGCorner.CornerRadius = UDim.new(1, 0)
+    SliderBGCorner.Parent = SliderBG
+    
+    local SliderFill = Instance.new("Frame")
+    SliderFill.Size = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 1, 0)
+    SliderFill.BackgroundColor3 = Color3.fromRGB(100, 80, 180)
+    SliderFill.BorderSizePixel = 0
+    SliderFill.Parent = SliderBG
+    
+    local SliderFillCorner = Instance.new("UICorner")
+    SliderFillCorner.CornerRadius = UDim.new(1, 0)
+    SliderFillCorner.Parent = SliderFill
+    
+    local KnobSlider = Instance.new("Frame")
+    KnobSlider.Size = UDim2.new(0, 12, 0, 12)
+    KnobSlider.Position = UDim2.new((defaultVal - minVal) / (maxVal - minVal), -6, 0.5, -6)
+    KnobSlider.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    KnobSlider.BorderSizePixel = 0
+    KnobSlider.Parent = SliderBG
+    
+    local KnobCorner = Instance.new("UICorner")
+    KnobCorner.CornerRadius = UDim.new(1, 0)
+    KnobCorner.Parent = KnobSlider
+    
+    local dragging = false
+    local currentValue = defaultVal
+    
+    local InputBtn = Instance.new("TextButton")
+    InputBtn.Size = UDim2.new(1, 0, 0, 20)
+    InputBtn.Position = UDim2.new(0, 0, 0, 12)
+    InputBtn.BackgroundTransparency = 1
+    InputBtn.Text = ""
+    InputBtn.Parent = SliderFrame
+    
+    local function UpdateSlider(inputX)
+        local percent = math.clamp((inputX - SliderBG.AbsolutePosition.X) / SliderBG.AbsoluteSize.X, 0, 1)
+        currentValue = math.floor(minVal + (maxVal - minVal) * percent)
+        
+        SliderFill.Size = UDim2.new(percent, 0, 1, 0)
+        KnobSlider.Position = UDim2.new(percent, -6, 0.5, -6)
+        Label.Text = text .. ": " .. currentValue
+        
+        if callback then callback(currentValue) end
+    end
+    
+    InputBtn.MouseButton1Down:Connect(function()
+        dragging = true
+        UpdateSlider(Mouse.X)
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            UpdateSlider(input.Position.X)
+        end
+    end)
+    
+    return {GetValue = function() return currentValue end}
+end
+
+-- ═══════════════════════════════════════
+-- YARDIMCI FONKSİYONLAR
+-- ═══════════════════════════════════════
+
+local function CanMoveObject(obj)
+    if not obj then return false end
+    if not obj:IsA("BasePart") then return false end
+    if obj.Anchored then return false end
+    
+    local char = GetCharacter()
+    if char and obj:IsDescendantOf(char) then return false end
+    
+    local objName = obj.Name:lower()
+    if objName:find("terrain") or objName:find("camera") or objName:find("baseplate") then
+        return false
+    end
+    
+    return true
+end
+
+local function GetAllMovableObjects()
+    local objects = {}
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if CanMoveObject(obj) then
+            table.insert(objects, obj)
+        end
+    end
+    return objects
+end
+
+-- NPC/Yaratık Bulma
+local function IsNPCOrCreature(model)
+    if not model or not model:IsA("Model") then return false end
+    
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr.Character == model then
+            return false
+        end
+    end
+    
+    return true
+end
+
+local function GetNPCRootPart(model)
+    return model:FindFirstChild("HumanoidRootPart") 
+        or model:FindFirstChild("Torso") 
+        or model:FindFirstChild("UpperTorso")
+        or model:FindFirstChild("Head")
+        or model:FindFirstChildWhichIsA("BasePart")
+end
+
+local function GetAllNPCs()
+    local npcs = {}
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and IsNPCOrCreature(obj) then
+            table.insert(npcs, obj)
+        end
+    end
+    return npcs
+end
+
+-- ═══════════════════════════════════════
+-- GELİŞTİRİLMİŞ TEHLİKELİ NPC TESPİTİ
+-- ═══════════════════════════════════════
+
+local function IsDangerousNPC(model)
+    if not model then return false, "Unknown" end
+    
+    local dangerLevel = 0
+    local safeLevel = 0
+    local reason = ""
+    
+    local modelName = model.Name:lower()
+    
+    -- Güvenli kontrol (önce)
+    for _, keyword in pairs(SafeKeywords) do
+        if modelName:find(keyword) then
+            safeLevel = safeLevel + 3
+            reason = "Safe: " .. keyword
+        end
+    end
+    
+    -- Tehlikeli isim kontrolü
+    for _, keyword in pairs(DangerousKeywords) do
+        if modelName:find(keyword) then
+            dangerLevel = dangerLevel + 2
+            reason = "Name: " .. keyword
+            break
+        end
+    end
+    
+    -- Script kontrolü (detaylı)
+    for _, child in pairs(model:GetDescendants()) do
+        local childName = child.Name:lower()
+        
+        if child:IsA("Script") or child:IsA("LocalScript") or child:IsA("ModuleScript") then
+            -- Tehlikeli scriptler
+            if childName:find("attack") or childName:find("damage") or childName:find("kill") 
+                or childName:find("hurt") or childName:find("combat") or childName:find("chase")
+                or childName:find("follow") or childName:find("enemy") or childName:find("aggro")
+                or childName:find("pathfind") or childName:find("pursue") then
+                dangerLevel = dangerLevel + 3
+                reason = "Script: " .. child.Name
+            end
+            
+            -- Güvenli scriptler
+            if childName:find("shop") or childName:find("dialog") or childName:find("talk")
+                or childName:find("quest") or childName:find("trade") then
+                safeLevel = safeLevel + 2
+            end
+        end
+        
+        -- Silah parçaları
+        if child:IsA("BasePart") then
+            if childName:find("sword") or childName:find("weapon") or childName:find("blade")
+                or childName:find("claw") or childName:find("fang") or childName:find("hitbox")
+                or childName:find("damage") or childName:find("attack") then
+                dangerLevel = dangerLevel + 2
+                reason = "Weapon: " .. child.Name
+            end
+        end
+        
+        -- Tool kontrolü
+        if child:IsA("Tool") then
+            local toolName = child.Name:lower()
+            if toolName:find("sword") or toolName:find("gun") or toolName:find("weapon") then
+                dangerLevel = dangerLevel + 2
+            end
+        end
+    end
+    
+    -- Humanoid durumu
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        -- Yüksek hız = muhtemelen saldırgan
+        if humanoid.WalkSpeed > 25 then
+            dangerLevel = dangerLevel + 1
+        end
+        
+        -- Çok yüksek hız = kesinlikle tehlikeli
+        if humanoid.WalkSpeed > 40 then
+            dangerLevel = dangerLevel + 2
+            reason = "High Speed: " .. humanoid.WalkSpeed
+        end
+        
+        -- Yüksek sağlık
+        if humanoid.MaxHealth > 200 then
+            dangerLevel = dangerLevel + 1
+        end
+        
+        if humanoid.MaxHealth > 1000 then
+            dangerLevel = dangerLevel + 2
+            reason = "Boss HP: " .. humanoid.MaxHealth
+        end
+    end
+    
+    -- Oyuncuya yakınlık ve davranış kontrolü
+    Character = GetCharacter()
+    if Character then
+        local playerRoot = Character:FindFirstChild("HumanoidRootPart")
+        local npcRoot = GetNPCRootPart(model)
+        
+        if playerRoot and npcRoot then
+            local distance = (npcRoot.Position - playerRoot.Position).Magnitude
+            
+            if distance < 50 then
+                -- Oyuncuya doğru bakıyor mu?
+                local direction = (playerRoot.Position - npcRoot.Position).Unit
+                local npcLook = npcRoot.CFrame.LookVector
+                local dot = direction:Dot(npcLook)
+                
+                -- Oyuncuya bakıyor ve hareket ediyor
+                if dot > 0.5 and npcRoot.Velocity.Magnitude > 8 then
+                    dangerLevel = dangerLevel + 2
+                    reason = "Chasing Player"
+                end
+                
+                -- Çok yakın ve hareket ediyor
+                if distance < 20 and npcRoot.Velocity.Magnitude > 5 then
+                    dangerLevel = dangerLevel + 1
+                end
+            end
+        end
+    end
+    
+    -- Sonuç: Tehlike seviyesi güvenlik seviyesinden yüksekse tehlikeli
+    local isDangerous = (dangerLevel - safeLevel) >= 2
+    
+    return isDangerous, reason
+end
+
+-- ═══════════════════════════════════════
+-- ESP SİSTEMİ (DÜZELTİLMİŞ)
+-- ═══════════════════════════════════════
+
+local function CreateESPForNPC(npc)
+    if not npc or ESPObjects[npc] then return end
+    
+    local rootPart = GetNPCRootPart(npc)
+    if not rootPart then return end
+    
+    local humanoid = npc:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    pcall(function()
+        local isDangerous, dangerReason = IsDangerousNPC(npc)
+        
+        -- Billboard GUI
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "ESP_" .. npc.Name
+        billboard.Adornee = rootPart
+        billboard.Size = UDim2.new(0, 180, 0, 45)
+        billboard.StudsOffset = Vector3.new(0, 3, 0)
+        billboard.AlwaysOnTop = true
+        billboard.MaxDistance = 500
+        billboard.Parent = rootPart
+        
+        local mainFrame = Instance.new("Frame")
+        mainFrame.Size = UDim2.new(1, 0, 1, 0)
+        mainFrame.BackgroundTransparency = 1
+        mainFrame.Parent = billboard
+        
+        -- İsim Label
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, 0, 0.4, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = npc.Name
+        nameLabel.TextColor3 = isDangerous and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
+        nameLabel.TextStrokeTransparency = 0.3
+        nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        nameLabel.TextSize = 13
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.Parent = mainFrame
+        
+        -- Bilgi Label
+        local infoLabel = Instance.new("TextLabel")
+        infoLabel.Size = UDim2.new(1, 0, 0.3, 0)
+        infoLabel.Position = UDim2.new(0, 0, 0.4, 0)
+        infoLabel.BackgroundTransparency = 1
+        infoLabel.Text = "HP: " .. math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
+        infoLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        infoLabel.TextStrokeTransparency = 0.3
+        infoLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        infoLabel.TextSize = 10
+        infoLabel.Font = Enum.Font.Gotham
+        infoLabel.Parent = mainFrame
+        
+        -- Durum Label
+        local dangerLabel = Instance.new("TextLabel")
+        dangerLabel.Size = UDim2.new(1, 0, 0.3, 0)
+        dangerLabel.Position = UDim2.new(0, 0, 0.7, 0)
+        dangerLabel.BackgroundTransparency = 1
+        dangerLabel.Text = isDangerous and "⚠️ DANGER" or "✓ SAFE"
+        dangerLabel.TextColor3 = isDangerous and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(100, 255, 100)
+        dangerLabel.TextStrokeTransparency = 0.3
+        dangerLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        dangerLabel.TextSize = 9
+        dangerLabel.Font = Enum.Font.GothamBold
+        dangerLabel.Parent = mainFrame
+        
+        -- Highlight
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "ESPHighlight"
+        highlight.Adornee = npc
+        highlight.FillColor = isDangerous and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
+        highlight.FillTransparency = 0.85
+        highlight.OutlineColor = isDangerous and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
+        highlight.OutlineTransparency = 0.2
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = npc
+        
+        ESPObjects[npc] = {
+            Billboard = billboard,
+            Highlight = highlight,
+            NameLabel = nameLabel,
+            InfoLabel = infoLabel,
+            DangerLabel = dangerLabel,
+            IsDangerous = isDangerous,
+            Humanoid = humanoid,
+            RootPart = rootPart
+        }
+    end)
+end
+
+local function RemoveESPForNPC(npc)
+    if not ESPObjects[npc] then return end
+    
+    pcall(function()
+        local data = ESPObjects[npc]
+        if data.Billboard then data.Billboard:Destroy() end
+        if data.Highlight then data.Highlight:Destroy() end
+        ESPObjects[npc] = nil
+    end)
+end
+
+local function UpdateESP()
+    if not Settings.ESPEnabled then return end
+    
+    pcall(function()
+        Character = GetCharacter()
+        local playerRoot = Character and Character:FindFirstChild("HumanoidRootPart")
+        
+        for npc, data in pairs(ESPObjects) do
+            if not npc or not npc.Parent then
+                RemoveESPForNPC(npc)
+            elseif data.Humanoid and data.RootPart and playerRoot then
+                local distance = math.floor((data.RootPart.Position - playerRoot.Position).Magnitude)
+                local hp = math.floor(data.Humanoid.Health)
+                local maxHp = math.floor(data.Humanoid.MaxHealth)
+                
+                data.InfoLabel.Text = "HP: " .. hp .. "/" .. maxHp .. " [" .. distance .. "m]"
+                
+                -- Tehlike durumu güncelle
+                local isDangerous = IsDangerousNPC(npc)
+                if isDangerous ~= data.IsDangerous then
+                    data.IsDangerous = isDangerous
+                    data.NameLabel.TextColor3 = isDangerous and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
+                    data.DangerLabel.Text = isDangerous and "⚠️ DANGER" or "✓ SAFE"
+                    data.DangerLabel.TextColor3 = isDangerous and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(100, 255, 100)
+                    data.Highlight.FillColor = isDangerous and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
+                    data.Highlight.OutlineColor = isDangerous and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
+                end
+            end
+        end
+    end)
+end
+
+local function EnableESP()
+    Settings.ESPEnabled = true
+    
+    for _, npc in pairs(GetAllNPCs()) do
+        CreateESPForNPC(npc)
+    end
+    
+    Connections.ESPAdded = workspace.DescendantAdded:Connect(function(obj)
+        if not Settings.ESPEnabled then return end
+        wait(0.1)
+        if obj:IsA("Model") and IsNPCOrCreature(obj) then
+            CreateESPForNPC(obj)
+        end
+    end)
+    
+    Connections.ESPRemoved = workspace.DescendantRemoving:Connect(function(obj)
+        if ESPObjects[obj] then
+            RemoveESPForNPC(obj)
+        end
+    end)
+    
+    local frameCount = 0
+    Connections.ESPUpdate = RunService.Heartbeat:Connect(function()
+        if not Settings.ESPEnabled then return end
+        frameCount = frameCount + 1
+        if frameCount < Settings.ESPUpdateRate then return end
+        frameCount = 0
+        UpdateESP()
+    end)
+end
+
+local function DisableESP()
+    Settings.ESPEnabled = false
+    
+    for npc, _ in pairs(ESPObjects) do
+        RemoveESPForNPC(npc)
+    end
+    ESPObjects = {}
+    
+    if Connections.ESPAdded then Connections.ESPAdded:Disconnect() end
+    if Connections.ESPRemoved then Connections.ESPRemoved:Disconnect() end
+    if Connections.ESPUpdate then Connections.ESPUpdate:Disconnect() end
+end
+
+-- ═══════════════════════════════════════
+-- GELİŞTİRİLMİŞ RAGDOLL SİSTEMİ (HYPERSONIC BLOCK)
+-- ═══════════════════════════════════════
+
+local function CreateHypersonicBlock()
+    local block = Instance.new("Part")
+    block.Name = "HypersonicFlingBlock"
+    block.Size = Vector3.new(2, 2, 2)
+    block.Transparency = 0.8
+    block.BrickColor = BrickColor.new("Really red")
+    block.Material = Enum.Material.Neon
+    block.CanCollide = false
+    block.Anchored = false
+    block.Massless = true
+    
+    -- Mesh ekle
+    local mesh = Instance.new("SpecialMesh")
+    mesh.MeshType = Enum.MeshType.Sphere
+    mesh.Parent = block
+    
+    return block
+end
+
+local function ApplyHypersonicRagdoll(model)
+    if not model then return end
+    if RagdolledNPCs[model] then return end
+    
+    pcall(function()
+        local humanoid = model:FindFirstChildOfClass("Humanoid")
+        local rootPart = GetNPCRootPart(model)
+        
+        if not humanoid or not rootPart then return end
+        
+        local originalData = {
+            WalkSpeed = humanoid.WalkSpeed,
+            JumpPower = humanoid.JumpPower,
+            JumpHeight = humanoid.JumpHeight,
+            PlatformStand = humanoid.PlatformStand,
+            AutoRotate = humanoid.AutoRotate
+        }
+        
+        -- NPC'yi durdur
+        humanoid.WalkSpeed = 0
+        humanoid.JumpPower = 0
+        if humanoid.JumpHeight then humanoid.JumpHeight = 0 end
+        humanoid.PlatformStand = true
+        humanoid.AutoRotate = false
+        
+        -- Motor6D'leri devre dışı bırak
+        local motors = {}
+        for _, motor in pairs(model:GetDescendants()) do
+            if motor:IsA("Motor6D") then
+                table.insert(motors, {Motor = motor, Enabled = motor.Enabled})
+                motor.Enabled = false
+            end
+        end
+        
+        -- Hypersonic Block oluştur
+        local flingBlock = CreateHypersonicBlock()
+        flingBlock.Parent = workspace
+        flingBlock.CFrame = rootPart.CFrame
+        
+        -- Block'u NPC'ye bağla
+        local weld = Instance.new("Weld")
+        weld.Part0 = flingBlock
+        weld.Part1 = rootPart
+        weld.Parent = flingBlock
+        
+        -- BodyAngularVelocity ile hypersonic döndürme
+        local angularVelocity = Instance.new("BodyAngularVelocity")
+        angularVelocity.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        angularVelocity.AngularVelocity = Vector3.new(0, 9999, 0) -- Hypersonic hız
+        angularVelocity.Parent = flingBlock
+        
+        -- Tüm parçalara collision aç
+        for _, part in pairs(model:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+                -- Rastgele velocity ver
+                part.Velocity = Vector3.new(
+                    math.random(-30, 30),
+                    math.random(20, 50),
+                    math.random(-30, 30)
+                )
+            end
+        end
+        
+        -- Efekt
+        local ragdollEffect = Instance.new("BillboardGui")
+        ragdollEffect.Name = "RagdollEffect"
+        ragdollEffect.Size = UDim2.new(0, 60, 0, 60)
+        ragdollEffect.StudsOffset = Vector3.new(0, 3, 0)
+        ragdollEffect.Adornee = rootPart
+        ragdollEffect.Parent = rootPart
+        
+        local ragdollIcon = Instance.new("TextLabel")
+        ragdollIcon.Size = UDim2.new(1, 0, 1, 0)
+        ragdollIcon.BackgroundTransparency = 1
+        ragdollIcon.Text = "💀🌀"
+        ragdollIcon.TextSize = 30
+        ragdollIcon.Parent = ragdollEffect
+        
+        RagdolledNPCs[model] = {
+            OriginalData = originalData,
+            Motors = motors,
+            Effect = ragdollEffect,
+            Humanoid = humanoid,
+            FlingBlock = flingBlock,
+            AngularVelocity = angularVelocity
+        }
+        
+        -- 5 saniye sonra block'u kaldır (ragdoll kalır)
+        spawn(function()
+            wait(5)
+            if flingBlock and flingBlock.Parent then
+                flingBlock:Destroy()
+            end
+        end)
+    end)
+end
+
+local function RemoveRagdoll(model)
+    if not model or not RagdolledNPCs[model] then return end
+    
+    pcall(function()
+        local data = RagdolledNPCs[model]
+        local humanoid = data.Humanoid
+        
+        if humanoid and humanoid.Parent then
+            humanoid.WalkSpeed = data.OriginalData.WalkSpeed
+            humanoid.JumpPower = data.OriginalData.JumpPower
+            if humanoid.JumpHeight then
+                humanoid.JumpHeight = data.OriginalData.JumpHeight
+            end
+            humanoid.PlatformStand = data.OriginalData.PlatformStand
+            humanoid.AutoRotate = data.OriginalData.AutoRotate
+        end
+        
+        for _, motorData in pairs(data.Motors) do
+            if motorData.Motor and motorData.Motor.Parent then
+                motorData.Motor.Enabled = motorData.Enabled
+            end
+        end
+        
+        if data.Effect then data.Effect:Destroy() end
+        if data.FlingBlock then data.FlingBlock:Destroy() end
+        
+        RagdolledNPCs[model] = nil
+    end)
+end
+
+-- ═══════════════════════════════════════
+-- FLY SİSTEMİ (MOBILE UYUMLU)
+-- ═══════════════════════════════════════
+
+local flyControls = {
+    W = false, A = false, S = false, D = false,
+    Space = false, LeftShift = false,
+    Up = false, Down = false, Left = false, Right = false
+}
+
+local function EnableFly()
+    Settings.FlyEnabled = true
+    
+    Character = GetCharacter()
+    HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+    
+    if not HumanoidRootPart then return end
+    
+    local humanoid = Character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid.PlatformStand = true
+    end
+    
+    -- BodyGyro
+    FlyBodyGyro = Instance.new("BodyGyro")
+    FlyBodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    FlyBodyGyro.P = 9e4
+    FlyBodyGyro.Parent = HumanoidRootPart
+    
+    -- BodyVelocity
+    FlyBodyVelocity = Instance.new("BodyVelocity")
+    FlyBodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    FlyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    FlyBodyVelocity.Parent = HumanoidRootPart
+    
+    -- Klavye kontrolü
+    Connections.FlyKeyDown = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if input.KeyCode == Enum.KeyCode.W then flyControls.W = true end
+        if input.KeyCode == Enum.KeyCode.A then flyControls.A = true end
+        if input.KeyCode == Enum.KeyCode.S then flyControls.S = true end
+        if input.KeyCode == Enum.KeyCode.D then flyControls.D = true end
+        if input.KeyCode == Enum.KeyCode.Space then flyControls.Space = true end
+        if input.KeyCode == Enum.KeyCode.LeftShift then flyControls.LeftShift = true end
+    end)
+    
+    Connections.FlyKeyUp = UserInputService.InputEnded:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.W then flyControls.W = false end
+        if input.KeyCode == Enum.KeyCode.A then flyControls.A = false end
+        if input.KeyCode == Enum.KeyCode.S then flyControls.S = false end
+        if input.KeyCode == Enum.KeyCode.D then flyControls.D = false end
+        if input.KeyCode == Enum.KeyCode.Space then flyControls.Space = false end
+        if input.KeyCode == Enum.KeyCode.LeftShift then flyControls.LeftShift = false end
+    end)
+    
+    -- Fly loop
+    Connections.FlyLoop = RunService.RenderStepped:Connect(function()
+        if not Settings.FlyEnabled then return end
+        if not FlyBodyGyro or not FlyBodyVelocity then return end
+        
+        pcall(function()
+            -- Kamera yönü
+            local camCF = Camera.CFrame
+            FlyBodyGyro.CFrame = camCF
+            
+            -- Hareket vektörü
+            local moveVector = Vector3.new(0, 0, 0)
+            
+            -- Klavye
+            if flyControls.W then moveVector = moveVector + camCF.LookVector end
+            if flyControls.S then moveVector = moveVector - camCF.LookVector end
+            if flyControls.A then moveVector = moveVector - camCF.RightVector end
+            if flyControls.D then moveVector = moveVector + camCF.RightVector end
+            if flyControls.Space then moveVector = moveVector + Vector3.new(0, 1, 0) end
+            if flyControls.LeftShift then moveVector = moveVector - Vector3.new(0, 1, 0) end
+            
+            -- Mobile thumbstick
+            if humanoid then
+                local moveDir = humanoid.MoveDirection
+                if moveDir.Magnitude > 0.1 then
+                    moveVector = moveVector + camCF.LookVector * moveDir.Z + camCF.RightVector * moveDir.X
+                end
+            end
+            
+            -- Velocity uygula
+            if moveVector.Magnitude > 0 then
+                FlyBodyVelocity.Velocity = moveVector.Unit * Settings.FlySpeed
+            else
+                FlyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            end
+        end)
+    end)
+end
+
+local function DisableFly()
+    Settings.FlyEnabled = false
+    
+    pcall(function()
+        if FlyBodyGyro then FlyBodyGyro:Destroy() FlyBodyGyro = nil end
+        if FlyBodyVelocity then FlyBodyVelocity:Destroy() FlyBodyVelocity = nil end
+        
+        Character = GetCharacter()
+        local humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = false
+        end
+    end)
+    
+    if Connections.FlyKeyDown then Connections.FlyKeyDown:Disconnect() end
+    if Connections.FlyKeyUp then Connections.FlyKeyUp:Disconnect() end
+    if Connections.FlyLoop then Connections.FlyLoop:Disconnect() end
+    
+    flyControls = {W = false, A = false, S = false, D = false, Space = false, LeftShift = false}
+end
+
+-- ═══════════════════════════════════════
+-- WALK FLING SİSTEMİ (INFINIT YIELD TARZI)
+-- ═══════════════════════════════════════
+
+local function EnableWalkFling()
+    Settings.FlingEnabled = true
+    
+    Character = GetCharacter()
+    HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+    
+    if not HumanoidRootPart then return end
+    
+    -- Fling part oluştur
+    FlingPart = Instance.new("Part")
+    FlingPart.Name = "FlingPart"
+    FlingPart.Size = Vector3.new(1, 1, 1)
+    FlingPart.Transparency = 1
+    FlingPart.CanCollide = false
+    FlingPart.Anchored = false
+    FlingPart.Massless = true
+    FlingPart.Parent = workspace
+    
+    -- Weld to player
+    local weld = Instance.new("Weld")
+    weld.Part0 = HumanoidRootPart
+    weld.Part1 = FlingPart
+    weld.C0 = CFrame.new(0, -3, 0)
+    weld.Parent = FlingPart
+    
+    -- BodyAngularVelocity
+    local angVel = Instance.new("BodyAngularVelocity")
+    angVel.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    angVel.AngularVelocity = Vector3.new(0, 9999, 0)
+    angVel.Parent = FlingPart
+    
+    -- Fling loop - NPC'lere çarpınca fırlat
+    Connections.FlingLoop = RunService.Heartbeat:Connect(function()
+        if not Settings.FlingEnabled then return end
+        if not FlingPart then return end
+        
+        pcall(function()
+            for _, npc in pairs(GetAllNPCs()) do
+                local npcRoot = GetNPCRootPart(npc)
+                if npcRoot then
+                    local distance = (npcRoot.Position - FlingPart.Position).Magnitude
+                    if distance < 8 then
+                        -- Ragdoll uygula
+                        if not RagdolledNPCs[npc] then
+                            ApplyHypersonicRagdoll(npc)
+                        end
+                        
+                        -- Fırlat
+                        npcRoot.Velocity = Vector3.new(
+                            math.random(-200, 200),
+                            math.random(100, 300),
+                            math.random(-200, 200)
+                        )
+                    end
+                end
+            end
+        end)
+    end)
+end
+
+local function DisableWalkFling()
+    Settings.FlingEnabled = false
+    
+    if FlingPart then
+        FlingPart:Destroy()
+        FlingPart = nil
+    end
+    
+    if Connections.FlingLoop then
+        Connections.FlingLoop:Disconnect()
+    end
+end
+
+-- ═══════════════════════════════════════
+-- DİĞER FONKSİYONLAR
+-- ═══════════════════════════════════════
+
+local function EnableBlackHole()
+    Settings.BlackHoleEnabled = true
+    
+    local pullCount = 0
+    
+    Connections.BlackHoleLoop = RunService.Heartbeat:Connect(function()
+        if not Settings.BlackHoleEnabled then return end
+        
+        pullCount = pullCount + 1
+        if pullCount < 3 then return end
+        pullCount = 0
+        
+        pcall(function()
+            Character = GetCharacter()
+            if not Character then return end
+            
+            HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+            if not HumanoidRootPart then return end
+            
+            local targetPos = HumanoidRootPart.Position + Vector3.new(0, 3, 0)
+            local force = Settings.PullForce / 10
+            local radius = Settings.PullRadius
+            
+            for _, obj in pairs(GetAllMovableObjects()) do
+                local dist = (targetPos - obj.Position).Magnitude
+                if dist <= radius and dist > 3 then
+                    local pullStrength = force * (1 - dist/radius) + 0.5
+                    local direction = (targetPos - obj.Position).Unit
+                    local newPos = obj.Position + (direction * pullStrength)
+                    obj.CFrame = CFrame.new(newPos) * (obj.CFrame - obj.CFrame.Position)
+                end
+            end
+            
+            for _, npc in pairs(GetAllNPCs()) do
+                local rootPart = GetNPCRootPart(npc)
+                if rootPart then
+                    local dist = (targetPos - rootPart.Position).Magnitude
+                    if dist <= radius and dist > 5 then
+                        local pullStrength = force * (1 - dist/radius) * 0.5
+                        local direction = (targetPos - rootPart.Position).Unit
+                        local newPos = rootPart.Position + (direction * pullStrength)
+                        rootPart.CFrame = CFrame.new(newPos) * (rootPart.CFrame - rootPart.CFrame.Position)
+                        
+                        if dist < 15 and not RagdolledNPCs[npc] then
+                            ApplyHypersonicRagdoll(npc)
+                        end
+                    end
+                end
+            end
+        end)
+    end)
+end
+
+local function DisableBlackHole()
+    Settings.BlackHoleEnabled = false
+    if Connections.BlackHoleLoop then
+        Connections.BlackHoleLoop:Disconnect()
+    end
+end
+
+-- Telekinesis
+local function StopTK()
+    pcall(function()
+        if TKHighlight then TKHighlight:Destroy() TKHighlight = nil end
+        TKObject = nil
+    end)
+end
+
+local function StartTK(obj)
+    if not obj then return end
+    StopTK()
+    TKObject = obj
+    
+    pcall(function()
+        TKHighlight = Instance.new("SelectionBox")
+        TKHighlight.Name = "TKHighlight"
+        TKHighlight.Adornee = obj
+        TKHighlight.Color3 = Color3.fromRGB(0, 200, 255)
+        TKHighlight.LineThickness = 0.04
+        TKHighlight.SurfaceTransparency = 0.7
+        TKHighlight.Parent = obj
+    end)
+end
+
+local function EnableTelekinesis()
+    Settings.TelekinesisEnabled = true
+    
+    Connections.TelekinesisLoop = RunService.RenderStepped:Connect(function()
+        if not Settings.TelekinesisEnabled then return end
+        if not TKObject or not TKObject.Parent then 
+            StopTK()
+            return 
+        end
+        
+        pcall(function()
+            Character = GetCharacter()
+            if not Character then return end
+            
+            HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+            if not HumanoidRootPart then return end
+            
+            local mousePos = Mouse.Hit.Position
+            local charPos = HumanoidRootPart.Position
+            
+            local direction = (mousePos - charPos)
+            direction = Vector3.new(direction.X, 0, direction.Z).Unit
+            
+            local targetPos = charPos + (direction * Settings.TKDistance)
+            targetPos = Vector3.new(targetPos.X, math.clamp(mousePos.Y, charPos.Y - 10, charPos.Y + 15), targetPos.Z)
+            
+            local currentPos = TKObject.Position
+            local newPos = currentPos:Lerp(targetPos, 0.3)
+            
+            TKObject.CFrame = CFrame.new(newPos)
+            TKObject.Velocity = Vector3.new(0, 0, 0)
+            TKObject.RotVelocity = Vector3.new(0, 0, 0)
+        end)
+    end)
+    
+    Connections.TKMouseDown = Mouse.Button1Down:Connect(function()
+        if not Settings.TelekinesisEnabled then return end
+        if TKObject then return end
+        
+        local target = Mouse.Target
+        if target then
+            local model = target.Parent
+            while model and model ~= workspace do
+                if IsNPCOrCreature(model) then
+                    local rootPart = GetNPCRootPart(model)
+                    if rootPart then
+                        ApplyHypersonicRagdoll(model)
+                        StartTK(rootPart)
+                        return
+                    end
+                end
+                model = model.Parent
+            end
+            
+            if CanMoveObject(target) then
+                StartTK(target)
+            end
+        end
+    end)
+    
+    Connections.TKMouseUp = Mouse.Button1Up:Connect(function()
+        if Settings.TelekinesisEnabled then
+            StopTK()
+        end
+    end)
+end
+
+local function DisableTelekinesis()
+    Settings.TelekinesisEnabled = false
+    StopTK()
+    
+    if Connections.TelekinesisLoop then Connections.TelekinesisLoop:Disconnect() end
+    if Connections.TKMouseDown then Connections.TKMouseDown:Disconnect() end
+    if Connections.TKMouseUp then Connections.TKMouseUp:Disconnect() end
+end
+
+-- Stun
+local function StunTarget(humanoid, rootPart)
+    if not humanoid or not rootPart then return end
+    
+    pcall(function()
+        local originalWalkSpeed = humanoid.WalkSpeed
+        local originalJumpPower = humanoid.JumpPower or humanoid.JumpHeight
+        
+        humanoid.WalkSpeed = 0
+        humanoid.JumpPower = 0
+        if humanoid.JumpHeight then humanoid.JumpHeight = 0 end
+        
+        local wasAnchored = rootPart.Anchored
+        rootPart.Anchored = true
+        
+        local stunEffect = Instance.new("BillboardGui")
+        stunEffect.Name = "StunEffect"
+        stunEffect.Size = UDim2.new(0, 50, 0, 50)
+        stunEffect.StudsOffset = Vector3.new(0, 3, 0)
+        stunEffect.Adornee = rootPart
+        stunEffect.Parent = rootPart
+        
+        local stunIcon = Instance.new("TextLabel")
+        stunIcon.Size = UDim2.new(1, 0, 1, 0)
+        stunIcon.BackgroundTransparency = 1
+        stunIcon.Text = "💫"
+        stunIcon.TextSize = 30
+        stunIcon.Parent = stunEffect
+        
+        StunnedObjects[rootPart] = {
+            Humanoid = humanoid,
+            OriginalWalkSpeed = originalWalkSpeed,
+            OriginalJumpPower = originalJumpPower,
+            WasAnchored = wasAnchored,
+            Effect = stunEffect
+        }
+    end)
+end
+
+local function UnstunTarget(rootPart)
+    if not rootPart or not StunnedObjects[rootPart] then return end
+    
+    pcall(function()
+        local data = StunnedObjects[rootPart]
+        
+        if data.Humanoid then
+            data.Humanoid.WalkSpeed = data.OriginalWalkSpeed
+            data.Humanoid.JumpPower = data.OriginalJumpPower
+            if data.Humanoid.JumpHeight then
+                data.Humanoid.JumpHeight = data.OriginalJumpPower
+            end
+        end
+        
+        rootPart.Anchored = data.WasAnchored
+        if data.Effect then data.Effect:Destroy() end
+        StunnedObjects[rootPart] = nil
+    end)
+end
+
+local function EnableStun()
+    Settings.StunEnabled = true
+    
+    Connections.StunClick = Mouse.Button1Down:Connect(function()
+        if not Settings.StunEnabled then return end
+        
+        local target = Mouse.Target
+        if not target then return end
+        
+        local character = nil
+        local parent = target.Parent
+        while parent and parent ~= workspace do
+            if parent:FindFirstChildOfClass("Humanoid") then
+                character = parent
+                break
+            end
+            parent = parent.Parent
+        end
+        
+        if character then
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            local rootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+            
+            if humanoid and rootPart then
+                if StunnedObjects[rootPart] then
+                    UnstunTarget(rootPart)
+                else
+                    StunTarget(humanoid, rootPart)
+                end
+            end
+        end
+    end)
+end
+
+local function DisableStun()
+    Settings.StunEnabled = false
+    
+    for rootPart, _ in pairs(StunnedObjects) do
+        UnstunTarget(rootPart)
+    end
+    StunnedObjects = {}
+    
+    if Connections.StunClick then Connections.StunClick:Disconnect() end
+end
+
+-- Click Ragdoll
+local function EnableClickRagdoll()
+    Settings.RagdollEnabled = true
+    
+    Connections.RagdollClick = Mouse.Button1Down:Connect(function()
+        if not Settings.RagdollEnabled then return end
+        
+        local target = Mouse.Target
+        if not target then return end
+        
+        local model = target.Parent
+        while model and model ~= workspace do
+            if IsNPCOrCreature(model) then
+                if RagdolledNPCs[model] then
+                    RemoveRagdoll(model)
+                else
+                    ApplyHypersonicRagdoll(model)
+                end
+                return
+            end
+            model = model.Parent
+        end
+    end)
+end
+
+local function DisableClickRagdoll()
+    Settings.RagdollEnabled = false
+    if Connections.RagdollClick then Connections.RagdollClick:Disconnect() end
+end
+
+-- Auto Ragdoll
+local function IsNPCAttacking(npc)
+    if not npc then return false end
+    
+    local humanoid = npc:FindFirstChildOfClass("Humanoid")
+    local rootPart = GetNPCRootPart(npc)
+    
+    if not humanoid or not rootPart then return false end
+    
+    Character = GetCharacter()
+    if not Character then return false end
+    
+    local playerRoot = Character:FindFirstChild("HumanoidRootPart")
+    if not playerRoot then return false end
+    
+    local distance = (rootPart.Position - playerRoot.Position).Magnitude
+    
+    if distance < 35 then
+        local velocity = rootPart.Velocity.Magnitude
+        if velocity > 3 then
+            local direction = (playerRoot.Position - rootPart.Position).Unit
+            local npcDirection = rootPart.CFrame.LookVector
+            local dot = direction:Dot(npcDirection)
+            
+            if dot > 0.2 then return true end
+        end
+        
+        if distance < 15 then
+            local isDangerous = IsDangerousNPC(npc)
+            if isDangerous then return true end
+        end
+    end
+    
+    return false
+end
+
+local function EnableAutoRagdoll()
+    Settings.AutoRagdollEnabled = true
+    
+    Connections.AutoRagdollLoop = RunService.Heartbeat:Connect(function()
+        if not Settings.AutoRagdollEnabled then return end
+        
+        pcall(function()
+            for _, npc in pairs(GetAllNPCs()) do
+                if IsNPCAttacking(npc) and not RagdolledNPCs[npc] then
+                    ApplyHypersonicRagdoll(npc)
+                end
+            end
+        end)
+    end)
+end
+
+local function DisableAutoRagdoll()
+    Settings.AutoRagdollEnabled = false
+    if Connections.AutoRagdollLoop then Connections.AutoRagdollLoop:Disconnect() end
+    
+    for model, _ in pairs(RagdolledNPCs) do
+        RemoveRagdoll(model)
+    end
+end
+
+-- ═══════════════════════════════════════
+-- GUI ELEMANLARI
+-- ═══════════════════════════════════════
+
+local yPos = 0
+local spacing = 44
+
+-- ESP Toggle
+local ESPToggle = CreateToggle("ESP", "NPC ESP", "👁️", yPos, false, EnableESP, DisableESP)
+yPos = yPos + spacing
+
+-- Fly Toggle (YENİ)
+local FlyToggle = CreateToggle("Fly", "Toggle Fly", "🚀", yPos, false, EnableFly, DisableFly)
+yPos = yPos + spacing
+
+-- Walk Fling (YENİ)
+local FlingToggle = CreateToggle("Fling", "Walk Fling", "💥", yPos, false, EnableWalkFling, DisableWalkFling)
+yPos = yPos + spacing
+
+-- Black Hole
+local BlackHoleToggle = CreateToggle("BlackHole", "Black Hole", "🌀", yPos, false, EnableBlackHole, DisableBlackHole)
+yPos = yPos + spacing
+
+-- Telekinesis
+local TelekinesisToggle = CreateToggle("Telekinesis", "Telekinesis", "🖐️", yPos, false, EnableTelekinesis, DisableTelekinesis)
+yPos = yPos + spacing
+
+-- Stun
+local StunToggle = CreateToggle("Stun", "Stun/Freeze", "💫", yPos, false, EnableStun, DisableStun)
+yPos = yPos + spacing
+
+-- Click Ragdoll
+local RagdollToggle = CreateToggle("Ragdoll", "Click Ragdoll", "💀", yPos, false, EnableClickRagdoll, DisableClickRagdoll)
+yPos = yPos + spacing
+
+-- Auto Ragdoll
+local AutoRagdollToggle = CreateToggle("AutoRagdoll", "Auto Stop NPCs", "🛡️", yPos, false, EnableAutoRagdoll, DisableAutoRagdoll)
+yPos = yPos + spacing + 5
+
+-- Ragdoll All Butonu
+local RagdollAllBtn = CreateButton("RagdollAll", "💀 Ragdoll All NPCs", yPos, Color3.fromRGB(100, 50, 80))
+RagdollAllBtn.MouseButton1Click:Connect(function()
+    for _, npc in pairs(GetAllNPCs()) do
+        if not RagdolledNPCs[npc] then
+            ApplyHypersonicRagdoll(npc)
+        end
+    end
+end)
+yPos = yPos + 36
+
+-- Teleport All Butonu
+local TeleportBtn = CreateButton("TeleportAll", "📍 Teleport All To Me", yPos, Color3.fromRGB(60, 100, 60))
+TeleportBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        Character = GetCharacter()
+        if not Character then return end
+        
+        HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+        if not HumanoidRootPart then return end
+        
+        local charPos = HumanoidRootPart.Position
+        local frontDir = HumanoidRootPart.CFrame.LookVector
+        
+        local count = 0
+        for _, obj in pairs(GetAllMovableObjects()) do
+            local row = math.floor(count / 5)
+            local col = count % 5
+            
+            local offset = Vector3.new((col - 2) * 4, 1, 3 + (row * 3))
+            local targetPos = charPos + (frontDir * offset.Z) + (HumanoidRootPart.CFrame.RightVector * offset.X) + Vector3.new(0, offset.Y, 0)
+            
+            obj.CFrame = CFrame.new(targetPos)
+            obj.Velocity = Vector3.new(0, 0, 0)
+            
+            count = count + 1
+            if count % 10 == 0 then wait() end
+        end
+    end)
+end)
+yPos = yPos + 36
+
+-- Reset Butonu
+local ResetBtn = CreateButton("Reset", "🔄 Reset All", yPos, Color3.fromRGB(100, 35, 45))
+ResetBtn.MouseButton1Click:Connect(function()
+    ESPToggle.SetState(false)
+    FlyToggle.SetState(false)
+    FlingToggle.SetState(false)
+    BlackHoleToggle.SetState(false)
+    TelekinesisToggle.SetState(false)
+    StunToggle.SetState(false)
+    RagdollToggle.SetState(false)
+    AutoRagdollToggle.SetState(false)
+    
+    for model, _ in pairs(RagdolledNPCs) do
+        RemoveRagdoll(model)
+    end
+end)
+yPos = yPos + 40
+
+-- Sliderlar
+local ForceSlider = CreateSlider("Force", "⚡ Pull Force", yPos, 10, 100, 50, function(val)
+    Settings.PullForce = val
+end)
+yPos = yPos + 38
+
+local RadiusSlider = CreateSlider("Radius", "📏 Pull Radius", yPos, 50, 300, 150, function(val)
+    Settings.PullRadius = val
+end)
+yPos = yPos + 38
+
+local FlySpeedSlider = CreateSlider("FlySpeed", "🚀 Fly Speed", yPos, 10, 200, 50, function(val)
+    Settings.FlySpeed = val
+end)
+yPos = yPos + 40
+
+-- Canvas boyutunu güncelle
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, yPos + 10)
+
+-- ═══════════════════════════════════════
+-- KÜÇÜLTME
+-- ═══════════════════════════════════════
+
+local isMinimized = false
+
+MinBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    
+    if isMinimized then
+        TweenService:Create(MainFrame, TweenInfo.new(0.3), {Size = UDim2.new(0, 200, 0, 36)}):Play()
+        ScrollFrame.Visible = false
+        MinBtn.Text = "+"
+    else
+        TweenService:Create(MainFrame, TweenInfo.new(0.3), {Size = UDim2.new(0, 200, 0, 350)}):Play()
+        wait(0.15)
+        ScrollFrame.Visible = true
+        MinBtn.Text = "−"
+    end
+end)
+
+-- Mobile Drag Support
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+    end
+end)
+
+TitleBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- Karakter Yenilenme
+Player.CharacterAdded:Connect(function(char)
+    Character = char
+    HumanoidRootPart = char:WaitForChild("HumanoidRootPart", 10)
+    
+    -- Fly'ı kapat
+    if Settings.FlyEnabled then
+        FlyToggle.SetState(false)
+    end
+    
+    -- Fling'i kapat
+    if Settings.FlingEnabled then
+        FlingToggle.SetState(false)
+    end
+end)
+
+-- ═══════════════════════════════════════
+print([[
+╔════════════════════════════════════════╗
+║   🌀 Universal Tool v5.0 - Enhanced    ║
+╠════════════════════════════════════════╣
+║   ✅ Yüklendi!                         ║
+║                                        ║
+║   🆕 YENİ ÖZELLİKLER:                  ║
+║   • 👁️ Gelişmiş ESP (Safe/Danger)     ║
+║   • 🚀 Toggle Fly (Mobile Uyumlu)      ║
+║   • 💥 Walk Fling (Infinit Yield)      ║
+║   • 💀 Hypersonic Ragdoll              ║
+║   • 📜 Scroll GUI (Kaydırılabilir)     ║
+║                                        ║
+║   📱 MOBILE KONTROLLER:                ║
+║   • Thumbstick ile uçuş                ║
+║   • Dokunarak sürükleme                ║
+║   • Kaydırarak tüm özelliklere erişim  ║
+║                                        ║
+║   ⚠️ ESP AÇIKLAMASI:                   ║
+║   • 🔴 Kırmızı = Tehlikeli/Saldırgan   ║
+║   • 🟢 Yeşil = Güvenli                 ║
+╚════════════════════════════════════════╝
+]])
